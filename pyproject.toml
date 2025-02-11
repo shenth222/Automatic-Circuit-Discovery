@@ -35,6 +35,12 @@ pytest-cov = "^4.0.0"
 jupyterlab = "^3.5.0"
 jupyter = "^1.0.0"
 
+
+[[tool.poetry.source]]
+name = "mirrors"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
+priority = "primary"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
