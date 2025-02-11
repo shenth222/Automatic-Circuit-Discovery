@@ -153,8 +153,8 @@ class TLACDCExperiment:
         self.using_wandb = using_wandb
         if using_wandb:
             wandb.init(
-                entity=wandb_entity_name,
-                group=wandb_group_name,
+                # entity=wandb_entity_name,
+                # group=wandb_group_name,
                 project=wandb_project_name,
                 name=wandb_run_name,
                 notes=wandb_notes,

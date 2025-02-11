@@ -56,7 +56,11 @@ except Exception as e:
 
 # %% [markdown]
 # <h2>Imports etc</h2>
+# import os
 
+# # 设置 HTTP 代理
+# os.environ['HTTP_PROXY'] = 'http://127.0.0.1:10809'
+# os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:10809'
 #%%
 import wandb
 import IPython
@@ -152,9 +156,9 @@ parser.add_argument('--first-cache-cpu', type=str, required=False, default="True
 parser.add_argument('--second-cache-cpu', type=str, required=False, default="True", help='Value for SECOND_CACHE_CPU (the old name for the `corrupted_cache`)')
 parser.add_argument('--zero-ablation', action='store_true', help='Use zero ablation')
 parser.add_argument('--using-wandb', action='store_true', help='Use wandb')
-parser.add_argument('--wandb-entity-name', type=str, required=False, default="remix_school-of-rock", help='Value for WANDB_ENTITY_NAME')
+parser.add_argument('--wandb-entity-name', type=str, required=False, default="dylan", help='Value for WANDB_ENTITY_NAME')
 parser.add_argument('--wandb-group-name', type=str, required=False, default="default", help='Value for WANDB_GROUP_NAME')
-parser.add_argument('--wandb-project-name', type=str, required=False, default="acdc", help='Value for WANDB_PROJECT_NAME')
+parser.add_argument('--wandb-project-name', type=str, required=False, default="acdc-test", help='Value for WANDB_PROJECT_NAME')
 parser.add_argument('--wandb-run-name', type=str, required=False, default=None, help='Value for WANDB_RUN_NAME')
 parser.add_argument("--wandb-dir", type=str, default="/tmp/wandb")
 parser.add_argument("--wandb-mode", type=str, default="online")
