@@ -1,0 +1,4 @@
+cp ./transformer_lens/HookedTransformer.py ~/.cache/pypoetry/virtualenvs/acdc-yd1Q0k8s-py3.10/lib/python3.10/site-packages/transformer_lens/HookedTransformer.py 
+cp ./transformer_lens/loading_from_pretrained.py ~/.cache/pypoetry/virtualenvs/acdc-yd1Q0k8s-py3.10/lib/python3.10/site-packages/transformer_lens/loading_from_pretrained.py 
+cp ./transformer_lens/HookedTransformer.py /home/shenth/miniconda3/envs/circuit/lib/python3.10/site-packages/transformer_lens/HookedTransformer.py
+cp ./transformer_lens/loading_from_pretrained.py /home/shenth/miniconda3/envs/circuit/lib/python3.10/site-packages/transformer_lens/loading_from_pretrained.py 
