@@ -55,11 +55,13 @@ class AllDataThings:
     test_patch_data: torch.Tensor
 
 def get_docstring_model(device="cuda"):
-    tl_model = HookedTransformer.from_pretrained(
-        "attn-only-4l",
+    tl_model = HookedTransformer.from_pretrained( "../../../models/gpt2"
+        # "attn-only-4l",
     )
     tl_model.set_use_attn_result(True)
     tl_model.set_use_split_qkv_input(True)
+    if "use_hook_mlp_in" in tl_model.cfg.to_dict():
+        tl_model.set_use_hook_mlp_in(True)
     tl_model.to(device)
     return tl_model
 

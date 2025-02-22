@@ -234,7 +234,7 @@ second_metric = None  # some tasks only have one metric
 use_pos_embed = TASK.startswith("tracr")
 
 if TASK == "ioi":
-    num_examples = 100
+    num_examples = 1
     things = get_all_ioi_things(
         num_examples=num_examples, device=DEVICE, metric_name=args.metric
     )
@@ -271,7 +271,7 @@ elif TASK == "induction":
         num_examples=num_examples, seq_len=seq_len, device=DEVICE, metric=args.metric
     )
 elif TASK == "docstring":
-    num_examples = 50
+    num_examples = 1
     seq_len = 41
     things = get_all_docstring_things(
         num_examples=num_examples,
