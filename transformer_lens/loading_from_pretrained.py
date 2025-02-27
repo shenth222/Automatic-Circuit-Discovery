@@ -1,48 +1,18 @@
-"""Loading Pretrained Models Utilities.
-
-This module contains functions for loading pretrained models from the Hugging Face Hub.
-"""
-
+# %%
 import dataclasses
 import logging
-import os
 import re
-from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
+import einops
 import torch
 from huggingface_hub import HfApi
-from transformers import (
-    AutoConfig,
-    AutoModelForCausalLM,
-    BertForPreTraining,
-    T5ForConditionalGeneration,
-)
+from transformers import AutoConfig, AutoModelForCausalLM, BertForPreTraining
 
 import transformer_lens.utils as utils
 from transformer_lens.HookedTransformerConfig import HookedTransformerConfig
-from transformer_lens.pretrained.weight_conversions import (
-    convert_bert_weights,
-    convert_bloom_weights,
-    convert_coder_weights,
-    convert_gemma_weights,
-    convert_gpt2_weights,
-    convert_gptj_weights,
-    convert_llama_weights,
-    convert_mingpt_weights,
-    convert_mistral_weights,
-    convert_mixtral_weights,
-    convert_neel_solu_old_weights,
-    convert_neo_weights,
-    convert_neox_weights,
-    convert_opt_weights,
-    convert_phi3_weights,
-    convert_phi_weights,
-    convert_qwen2_weights,
-    convert_qwen_weights,
-    convert_t5_weights,
-)
 
+# %% The model names used to access the models on the HuggingFace Hub.
 OFFICIAL_MODEL_NAMES = [
     "gpt2",
     "gpt2-medium",
@@ -139,18 +109,11 @@ OFFICIAL_MODEL_NAMES = [
     "llama-13b-hf",
     "llama-30b-hf",
     "llama-65b-hf",
-    "meta-llama/Llama-2-7b-hf",
-    "meta-llama/Llama-2-7b-chat-hf",
-    "meta-llama/Llama-2-13b-hf",
-    "meta-llama/Llama-2-13b-chat-hf",
-    "meta-llama/Llama-2-70b-chat-hf",
-    "CodeLlama-7b-hf",
-    "CodeLlama-7b-Python-hf",
-    "CodeLlama-7b-Instruct-hf",
-    "meta-llama/Meta-Llama-3-8B",
-    "meta-llama/Meta-Llama-3-8B-Instruct",
-    "meta-llama/Meta-Llama-3-70B",
-    "meta-llama/Meta-Llama-3-70B-Instruct",
+    "Llama-2-7b-hf",
+    "Llama-2-7b-chat-hf",
+    "Llama-2-13b-hf",
+    "Llama-2-13b-chat-hf",
+    # TODO Llama-2-70b-hf requires Grouped-Query Attention, see the paper https://arxiv.org/pdf/2307.09288.pdf
     "Baidicoot/Othello-GPT-Transformer-Lens",
     "bert-base-cased",
     "roneneldan/TinyStories-1M",
@@ -171,62 +134,7 @@ OFFICIAL_MODEL_NAMES = [
     "stabilityai/stablelm-base-alpha-7b",
     "stabilityai/stablelm-tuned-alpha-3b",
     "stabilityai/stablelm-tuned-alpha-7b",
-    "mistralai/Mistral-7B-v0.1",
-    "mistralai/Mistral-7B-Instruct-v0.1",
-    "mistralai/Mixtral-8x7B-v0.1",
-    "mistralai/Mixtral-8x7B-Instruct-v0.1",
-    "bigscience/bloom-560m",
-    "bigscience/bloom-1b1",
-    "bigscience/bloom-1b7",
-    "bigscience/bloom-3b",
-    "bigscience/bloom-7b1",
-    "bigcode/santacoder",
-    "Qwen/Qwen-1_8B",
-    "Qwen/Qwen-7B",
-    "Qwen/Qwen-14B",
-    "Qwen/Qwen-1_8B-Chat",
-    "Qwen/Qwen-7B-Chat",
-    "Qwen/Qwen-14B-Chat",
-    "Qwen/Qwen1.5-0.5B",
-    "Qwen/Qwen1.5-0.5B-Chat",
-    "Qwen/Qwen1.5-1.8B",
-    "Qwen/Qwen1.5-1.8B-Chat",
-    "Qwen/Qwen1.5-4B",
-    "Qwen/Qwen1.5-4B-Chat",
-    "Qwen/Qwen1.5-7B",
-    "Qwen/Qwen1.5-7B-Chat",
-    "Qwen/Qwen1.5-14B",
-    "Qwen/Qwen1.5-14B-Chat",
-    "Qwen/Qwen2-0.5B",
-    "Qwen/Qwen2-0.5B-Instruct",
-    "Qwen/Qwen2-1.5B",
-    "Qwen/Qwen2-1.5B-Instruct",
-    "Qwen/Qwen2-7B",
-    "Qwen/Qwen2-7B-Instruct",
-    "microsoft/phi-1",
-    "microsoft/phi-1_5",
-    "microsoft/phi-2",
-    "microsoft/Phi-3-mini-4k-instruct",
-    "google/gemma-2b",
-    "google/gemma-7b",
-    "google/gemma-2b-it",
-    "google/gemma-7b-it",
-    "google/gemma-2-2b",
-    "google/gemma-2-2b-it",
-    "google/gemma-2-9b",
-    "google/gemma-2-9b-it",
-    "google/gemma-2-27b",
-    "google/gemma-2-27b-it",
-    "01-ai/Yi-6B",
-    "01-ai/Yi-34B",
-    "01-ai/Yi-6B-Chat",
-    "01-ai/Yi-34B-Chat",
-    "google-t5/t5-small",
-    "google-t5/t5-base",
-    "google-t5/t5-large",
-    "ai-forever/mGPT",
 ]
-"""Official model names for models on HuggingFace."""
 
 # Model Aliases:
 MODEL_ALIASES = {
@@ -547,26 +455,11 @@ MODEL_ALIASES = {
     "llama-13b-hf": ["llama-13b"],
     "llama-30b-hf": ["llama-30b"],
     "llama-65b-hf": ["llama-65b"],
-    "meta-llama/Llama-2-7b-hf": ["Llama-2-7b", "meta-llama/Llama-2-7b-hf"],
-    "meta-llama/Llama-2-7b-chat-hf": [
-        "Llama-2-7b-chat",
-        "meta-llama/Llama-2-7b-chat-hf",
-    ],
-    "meta-llama/Llama-2-13b-hf": ["Llama-2-13b", "meta-llama/Llama-2-13b-hf"],
-    "meta-llama/Llama-2-13b-chat-hf": [
-        "Llama-2-13b-chat",
-        "meta-llama/Llama-2-13b-chat-hf",
-    ],
-    "meta-llama/Llama-2-70b-chat-hf": ["Llama-2-70b-chat", "meta-llama-2-70b-chat-hf"],
-    "CodeLlama-7b-hf": ["CodeLlamallama-2-7b", "codellama/CodeLlama-7b-hf"],
-    "CodeLlama-7b-Python-hf": [
-        "CodeLlama-7b-python",
-        "codellama/CodeLlama-7b-Python-hf",
-    ],
-    "CodeLlama-7b-Instruct-hf": [
-        "CodeLlama-7b-instruct",
-        "codellama/CodeLlama-7b-Instruct-hf",
-    ],
+    "Llama-2-7b-hf": ["Llama-2-7b", "meta-llama/Llama-2-7b-hf"],
+    "Llama-2-7b-chat-hf": ["Llama-2-7b-chat", "meta-llama/Llama-2-7b-chat-hf"],
+    "Llama-2-13b-hf": ["Llama-2-13b", "meta-llama/Llama-2-13b-hf"],
+    "Llama-2-13b-chat-hf": ["Llama-2-13b-chat", "meta-llama/Llama-2-13b-chat-hf"],
+    # TODO Llama-2-70b-hf requires Grouped-Query Attention, see the paper https://arxiv.org/pdf/2307.09288.pdf
     "Baidicoot/Othello-GPT-Transformer-Lens": ["othello-gpt"],
     "roneneldan/TinyStories-1M": ["tiny-stories-1M"],
     "roneneldan/TinyStories-3M": ["tiny-stories-3M"],
@@ -598,79 +491,13 @@ MODEL_ALIASES = {
         "stablelm-tuned-alpha-7b",
         "stablelm-tuned-7b",
     ],
-    "mistralai/Mistral-7B-v0.1": ["mistral-7b"],
-    "mistralai/Mistral-7B-Instruct-v0.1": ["mistral-7b-instruct"],
-    "mistralai/Mixtral-8x7B-v0.1": ["mixtral", "mixtral-8x7b"],
-    "mistralai/Mixtral-8x7B-Instruct-v0.1": [
-        "mixtral-instruct",
-        "mixtral-8x7b-instruct",
-    ],
-    "bigscience/bloom-560m": ["bloom-560m"],
-    "bigscience/bloom-1b1": ["bloom-1b1"],
-    "bigscience/bloom-1b7": ["bloom-1b7"],
-    "bigscience/bloom-3b": ["bloom-3b"],
-    "bigscience/bloom-7b1": ["bloom-7b1"],
-    "bigcode/santacoder": ["santacoder"],
-    "Qwen/Qwen-1_8B": ["qwen-1.8b"],
-    "Qwen/Qwen-7B": ["qwen-7b"],
-    "Qwen/Qwen-14B": ["qwen-14b"],
-    "Qwen/Qwen-1_8B-Chat": ["qwen-1.8b-chat"],
-    "Qwen/Qwen-7B-Chat": ["qwen-7b-chat"],
-    "Qwen/Qwen-14B-Chat": ["qwen-14b-chat"],
-    "Qwen/Qwen1.5-0.5B": ["qwen1.5-0.5b"],
-    "Qwen/Qwen1.5-0.5B-Chat": ["qwen1.5-0.5b-chat"],
-    "Qwen/Qwen1.5-1.8B": ["qwen1.5-1.8b"],
-    "Qwen/Qwen1.5-1.8B-Chat": ["qwen1.5-1.8b-chat"],
-    "Qwen/Qwen1.5-4B": ["qwen1.5-4b"],
-    "Qwen/Qwen1.5-4B-Chat": ["qwen1.5-4b-chat"],
-    "Qwen/Qwen1.5-7B": ["qwen1.5-7b"],
-    "Qwen/Qwen1.5-7B-Chat": ["qwen1.5-7b-chat"],
-    "Qwen/Qwen1.5-14B": ["qwen1.5-14b"],
-    "Qwen/Qwen1.5-14B-Chat": ["qwen1.5-14b-chat"],
-    "microsoft/phi-1": ["phi-1"],
-    "microsoft/phi-1_5": ["phi-1_5"],
-    "microsoft/phi-2": ["phi-2"],
-    "microsoft/Phi-3-mini-4k-instruct": ["phi-3"],
-    "google/gemma-2b": ["gemma-2b"],
-    "google/gemma-7b": ["gemma-7b"],
-    "google/gemma-2b-it": ["gemma-2b-it"],
-    "google/gemma-7b-it": ["gemma-7b-it"],
-    "google/gemma-2-2b": ["gemma-2-2b"],
-    "google/gemma-2-9b": ["gemma-2-9b"],
-    "google/gemma-2-27b": ["gemma-2-27b"],
-    "google/gemma-2-2b-it": ["gemma-2-2b-it"],
-    "google/gemma-2-9b-it": ["gemma-2-9b-it"],
-    "google/gemma-2-27b-it": ["gemma-2-27b-it"],
-    "01-ai/Yi-6B": ["yi-6b", "Yi-6B"],
-    "01-ai/Yi-34B": ["yi-34b", "Yi-34B"],
-    "01-ai/Yi-6B-Chat": ["yi-6b-chat", "Yi-6B-Chat"],
-    "01-ai/Yi-34B-Chat": ["yi-34b-chat", "Yi-34B-Chat"],
-    "google-t5/t5-small": ["t5-small"],
-    "google-t5/t5-base": ["t5-base"],
-    "google-t5/t5-large": ["t5-large"],
-    "ai-forever/mGPT": ["mGPT"],
 }
-"""Model aliases for models on HuggingFace."""
-
-NON_HF_HOSTED_MODEL_NAMES = [
-    "llama-7b-hf",
-    "llama-13b-hf",
-    "llama-30b-hf",
-    "llama-65b-hf",
-]
-"""Official model names for models not hosted on HuggingFace."""
 
 # Sets a default model alias, by convention the first one in the model alias table, else the official name if it has no aliases
 DEFAULT_MODEL_ALIASES = [
-    MODEL_ALIASES[name][0] if name in MODEL_ALIASES else name for name in OFFICIAL_MODEL_NAMES
+    MODEL_ALIASES[name][0] if name in MODEL_ALIASES else name
+    for name in OFFICIAL_MODEL_NAMES
 ]
-
-NEED_REMOTE_CODE_MODELS = (
-    "bigcode/santacoder",
-    "Qwen/Qwen-",
-    "microsoft/phi-2",
-    "microsoft/Phi-3-mini-4k-instruct",
-)
 
 
 def make_model_alias_map():
@@ -692,12 +519,8 @@ def get_official_model_name(model_name: str):
     """
     Returns the official model name for a given model name (or alias).
     """
-    if (Path(model_name) / "config.json").exists():
-        logging.info("Loading model config from local directory")
-        official_model_name = model_name
-    else:
-        model_alias_map = make_model_alias_map()
-        official_model_name = model_alias_map.get(model_name.lower(), None)
+    model_alias_map = make_model_alias_map()
+    official_model_name = model_alias_map.get(model_name.lower(), None)
     if official_model_name is None:
         raise ValueError(
             f"{model_name} not found. Valid official model names (excl aliases): {OFFICIAL_MODEL_NAMES}"
@@ -713,30 +536,15 @@ def convert_hf_model_config(model_name: str, **kwargs):
     Takes the official_model_name as an input.
     """
     # In case the user passed in an alias
-    # if (Path(model_name) / "config.json").exists():
-    #     logging.info("Loading model config from local directory")
-    #     official_model_name = model_name
-    # else:
     official_model_name = get_official_model_name(model_name)
-
     # Load HuggingFace model config
-    if "llama" in official_model_name.lower():
-        architecture = "LlamaForCausalLM"
-    elif "gemma-2" in official_model_name.lower():
-        architecture = "Gemma2ForCausalLM"
-    elif "gemma" in official_model_name.lower():
-        architecture = "GemmaForCausalLM"
-    else:
-        huggingface_token = os.environ.get("HF_TOKEN", None)
-        hf_config = AutoConfig.from_pretrained(
-            official_model_name,
-            token=huggingface_token,
-            **kwargs,
-        )
+    if "llama" not in official_model_name.lower():
+        hf_config = AutoConfig.from_pretrained(official_model_name, **kwargs)
         architecture = hf_config.architectures[0]
-
+    else:
+        architecture = "LlamaForCausalLM"
     if official_model_name.startswith(
-        ("llama-7b", "meta-llama/Llama-2-7b")
+        ("llama-7b", "Llama-2-7b")
     ):  # same architecture for LLaMA and Llama-2
         cfg_dict = {
             "d_model": 4096,
@@ -745,39 +553,17 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "d_mlp": 11008,
             "n_layers": 32,
             "n_ctx": 2048 if official_model_name.startswith("llama-7b") else 4096,
-            "eps": 1e-6 if official_model_name.startswith("llama-7b") else 1e-5,
+            "eps": 1e-6,
             "d_vocab": 32000,
             "act_fn": "silu",
             "normalization_type": "RMS",
             "positional_embedding_type": "rotary",
-            "rotary_adjacent_pairs": False,
             "rotary_dim": 4096 // 32,
             "final_rms": True,
             "gated_mlp": True,
         }
-    elif official_model_name.startswith("CodeLlama-7b"):  # same architecture CodeLlama and Llama-2
-        cfg_dict = {
-            "d_model": 4096,
-            "d_head": 4096 // 32,
-            "n_heads": 32,
-            "d_mlp": 11008,
-            "n_layers": 32,
-            "n_ctx": 4096,
-            "eps": 1e-5,
-            "d_vocab": 32016,
-            "act_fn": "silu",
-            "normalization_type": "RMS",
-            "positional_embedding_type": "rotary",
-            "rotary_dim": 4096 // 32,
-            "final_rms": True,
-            "gated_mlp": True,
-            "rotary_base": 1000000,
-        }
-        if "python" in official_model_name.lower():
-            # The vocab size of python version of CodeLlama-7b is 32000
-            cfg_dict["d_vocab"] = 32000
     elif official_model_name.startswith(
-        ("llama-13b", "meta-llama/Llama-2-13b")
+        ("llama-13b", "Llama-2-13b")
     ):  # same architecture for LLaMA and Llama-2
         cfg_dict = {
             "d_model": 5120,
@@ -786,12 +572,11 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "d_mlp": 13824,
             "n_layers": 40,
             "n_ctx": 2048 if official_model_name.startswith("llama-13b") else 4096,
-            "eps": 1e-6 if official_model_name.startswith("llama-13b") else 1e-5,
+            "eps": 1e-6,
             "d_vocab": 32000,
             "act_fn": "silu",
             "normalization_type": "RMS",
             "positional_embedding_type": "rotary",
-            "rotary_adjacent_pairs": False,
             "rotary_dim": 5120 // 40,
             "final_rms": True,
             "gated_mlp": True,
@@ -809,7 +594,6 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "act_fn": "silu",
             "normalization_type": "RMS",
             "positional_embedding_type": "rotary",
-            "rotary_adjacent_pairs": False,
             "rotary_dim": 6656 // 52,
             "final_rms": True,
             "gated_mlp": True,
@@ -828,64 +612,6 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "normalization_type": "RMS",
             "positional_embedding_type": "rotary",
             "rotary_dim": 8192 // 64,
-            "rotary_adjacent_pairs": False,
-            "final_rms": True,
-            "gated_mlp": True,
-        }
-    elif "Llama-2-70b" in official_model_name:
-        cfg_dict = {
-            "d_model": 8192,
-            "d_head": 128,
-            "n_heads": 64,
-            "d_mlp": 28672,
-            "n_layers": 80,
-            "n_ctx": 4096,
-            "eps": 1e-5,
-            "d_vocab": 32000,
-            "act_fn": "silu",
-            "n_key_value_heads": 8,
-            "normalization_type": "RMS",
-            "positional_embedding_type": "rotary",
-            "rotary_adjacent_pairs": False,
-            "rotary_dim": 128,
-            "final_rms": True,
-            "gated_mlp": True,
-        }
-    elif "Meta-Llama-3-8B" in official_model_name:
-        cfg_dict = {
-            "d_model": 4096,
-            "d_head": 128,
-            "n_heads": 32,
-            "d_mlp": 14336,
-            "n_layers": 32,
-            "n_ctx": 8192,
-            "eps": 1e-5,
-            "d_vocab": 128256,
-            "act_fn": "silu",
-            "n_key_value_heads": 8,
-            "normalization_type": "RMS",
-            "positional_embedding_type": "rotary",
-            "rotary_adjacent_pairs": False,
-            "rotary_dim": 128,
-            "final_rms": True,
-            "gated_mlp": True,
-        }
-    elif "Meta-Llama-3-70B" in official_model_name:
-        cfg_dict = {
-            "d_model": 8192,
-            "d_head": 128,
-            "n_heads": 64,
-            "d_mlp": 28672,
-            "n_layers": 80,
-            "n_ctx": 8192,
-            "eps": 1e-5,
-            "d_vocab": 128256,
-            "act_fn": "silu",
-            "n_key_value_heads": 8,
-            "normalization_type": "RMS",
-            "positional_embedding_type": "rotary",
-            "rotary_adjacent_pairs": False,
-            "rotary_dim": 128,
             "final_rms": True,
             "gated_mlp": True,
         }
@@ -956,7 +682,6 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "parallel_attn_mlp": True,
             "positional_embedding_type": "rotary",
             "rotary_dim": hf_config.rotary_dim,
-            "rotary_adjacent_pairs": True,
             "normalization_type": "LN",
         }
     elif architecture == "GPTNeoXForCausalLM":
@@ -975,7 +700,6 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "scale_attn_by_inverse_layer_idx": False,
             "parallel_attn_mlp": True,
             "positional_embedding_type": "rotary",
-            "rotary_adjacent_pairs": False,
             "normalization_type": "LN",
         }
         rotary_pct = hf_config.rotary_pct
@@ -993,354 +717,12 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "act_fn": "gelu",
             "attention_dir": "bidirectional",
         }
-    elif architecture == "MistralForCausalLM":
-        cfg_dict = {
-            "d_model": 4096,
-            "d_head": 4096 // 32,
-            "n_heads": 32,
-            "d_mlp": 14336,
-            "n_layers": 32,
-            "n_ctx": 2048,  # Capped due to memory issues
-            "d_vocab": 32000,
-            "act_fn": "silu",
-            "normalization_type": "RMS",
-            "positional_embedding_type": "rotary",
-            "window_size": 4096,
-            "attn_types": ["local"] * 32,
-            "eps": 1e-05,
-            "n_key_value_heads": 8,
-            "gated_mlp": True,
-            "use_local_attn": True,
-            "rotary_dim": 4096 // 32,
-        }
-    elif architecture == "MixtralForCausalLM":
-        cfg_dict = {
-            "dtype": torch.bfloat16,
-            "d_model": hf_config.hidden_size,
-            "d_head": hf_config.hidden_size // hf_config.num_attention_heads,
-            "n_heads": hf_config.num_attention_heads,
-            "d_mlp": hf_config.intermediate_size,
-            "n_layers": hf_config.num_hidden_layers,
-            "n_ctx": hf_config.max_position_embeddings,  # Capped due to memory issues
-            "d_vocab": hf_config.vocab_size,
-            "act_fn": hf_config.hidden_act,
-            "normalization_type": "RMS",
-            "positional_embedding_type": "rotary",
-            "rotary_base": hf_config.rope_theta,
-            "window_size": hf_config.sliding_window,  # This is None, as no sliding window was used
-            "attn_types": ["global"] * 32,
-            "eps": hf_config.rms_norm_eps,
-            "n_key_value_heads": hf_config.num_key_value_heads,
-            "gated_mlp": True,
-            "use_local_attn": False,
-            "rotary_dim": hf_config.hidden_size // hf_config.num_attention_heads,
-            "num_experts": hf_config.num_local_experts,
-            "experts_per_token": hf_config.num_experts_per_tok,
-        }
-    elif architecture == "BloomForCausalLM":
-        cfg_dict = {
-            "d_model": hf_config.hidden_size,
-            "d_head": hf_config.hidden_size // hf_config.n_head,
-            "n_heads": hf_config.n_head,
-            "d_mlp": hf_config.hidden_size * 4,
-            "n_layers": hf_config.n_layer,
-            "n_ctx": 2048,  # Capped due to HF Tokenizer Constraints
-            "d_vocab": hf_config.vocab_size,
-            "act_fn": "gelu_fast",
-            "eps": hf_config.layer_norm_epsilon,
-            "normalization_type": "LN",
-            "post_embedding_ln": True,
-            "positional_embedding_type": "alibi",
-        }
-    elif architecture == "GPT2LMHeadCustomModel":
-        # santacoder
-        cfg_dict = {
-            "d_model": hf_config.n_embd,
-            "d_head": hf_config.n_embd // hf_config.n_head,
-            "n_heads": hf_config.n_head,
-            "d_mlp": hf_config.n_embd * 4,
-            "n_layers": hf_config.n_layer,
-            "n_ctx": hf_config.n_positions,
-            "eps": hf_config.layer_norm_epsilon,
-            "d_vocab": hf_config.vocab_size,
-            "act_fn": hf_config.activation_function,
-            "use_attn_scale": True,
-            "use_local_attn": False,
-            "trust_remote_code": "santacoder"
-            in official_model_name,  # Only santacoder needs trust_remote_code
-            "scale_attn_by_inverse_layer_idx": hf_config.scale_attn_by_inverse_layer_idx,
-            "normalization_type": "LN",
-        }
-    elif architecture == "LlamaForCausalLM":
-        cfg_dict = {
-            "d_model": hf_config.hidden_size,
-            "d_head": hf_config.hidden_size // hf_config.num_attention_heads,
-            "n_heads": hf_config.num_attention_heads,
-            "d_mlp": hf_config.intermediate_size,
-            "n_layers": hf_config.num_hidden_layers,
-            "n_ctx": hf_config.max_position_embeddings,
-            "eps": hf_config.rms_norm_eps,
-            "d_vocab": hf_config.vocab_size,
-            "act_fn": hf_config.hidden_act,
-            "n_key_value_heads": (
-                hf_config.num_key_value_heads
-                if hf_config.num_key_value_heads != hf_config.num_attention_heads
-                else None
-            ),
-            # This is done because the current implementation of GQA will use Grouped-Query Attention if
-            # n_key_value_heads is not None, but hf_config.num_key_value_heads is sometimes specified as
-            # the same as hf_config.num_attention_heads, in which case GQA should not be used.
-            "normalization_type": "RMS",
-            "positional_embedding_type": "rotary",
-            "rotary_adjacent_pairs": False,
-            "rotary_dim": hf_config.hidden_size // hf_config.num_attention_heads,
-            "final_rms": True,
-            "gated_mlp": True,
-        }
-    elif architecture == "QWenLMHeadModel":
-        cfg_dict = {
-            "d_model": hf_config.hidden_size,
-            "d_head": hf_config.hidden_size // hf_config.num_attention_heads,
-            "n_heads": hf_config.num_attention_heads,
-            "d_mlp": hf_config.intermediate_size // 2,
-            "n_layers": hf_config.num_hidden_layers,
-            "n_ctx": 2048,  # Capped bc the actual ctx length is 30k and the attn mask would be too big
-            "eps": hf_config.layer_norm_epsilon,
-            "d_vocab": hf_config.vocab_size,
-            "act_fn": "silu",
-            "use_attn_scale": hf_config.scale_attn_weights,
-            "initializer_range": hf_config.initializer_range,
-            "normalization_type": "RMS",
-            "positional_embedding_type": "rotary",
-            "rotary_dim": hf_config.kv_channels,
-            "rotary_adjacent_pairs": False,
-            "tokenizer_prepends_bos": True,
-            "trust_remote_code": True,
-            "final_rms": True,
-            "gated_mlp": True,
-        }
-    elif architecture == "Qwen2ForCausalLM":
-        # Note that Qwen1.5 models have architecture type Qwen2ForCausalLM.
-        cfg_dict = {
-            "d_model": hf_config.hidden_size,
-            "d_head": hf_config.hidden_size // hf_config.num_attention_heads,
-            "n_heads": hf_config.num_attention_heads,
-            "n_key_value_heads": hf_config.num_key_value_heads,
-            "d_mlp": hf_config.intermediate_size,
-            "n_layers": hf_config.num_hidden_layers,
-            "n_ctx": 2048,  # Capped bc the actual ctx length is 30k and the attn mask would be too big
-            "eps": hf_config.rms_norm_eps,
-            "d_vocab": hf_config.vocab_size,
-            "act_fn": hf_config.hidden_act,
-            "use_attn_scale": True,
-            "initializer_range": hf_config.initializer_range,
-            "normalization_type": "RMS",
-            "positional_embedding_type": "rotary",
-            "rotary_base": hf_config.rope_theta,
-            "rotary_adjacent_pairs": False,
-            "rotary_dim": hf_config.hidden_size // hf_config.num_attention_heads,
-            "tokenizer_prepends_bos": True,
-            "final_rms": True,
-            "gated_mlp": True,
-        }
-    elif architecture == "PhiForCausalLM":
-        # Architecture for microsoft/phi models
-        cfg_dict = {
-            "d_model": hf_config.hidden_size,
-            "d_head": hf_config.hidden_size // hf_config.num_attention_heads,
-            "n_heads": hf_config.num_attention_heads,
-            "d_mlp": hf_config.intermediate_size,
-            "n_layers": hf_config.num_hidden_layers,
-            "n_ctx": hf_config.max_position_embeddings,
-            "eps": hf_config.layer_norm_eps,
-            "d_vocab": hf_config.vocab_size,
-            "act_fn": hf_config.hidden_act,
-            "initializer_range": hf_config.initializer_range,
-            "normalization_type": "LN",
-            "positional_embedding_type": "rotary",
-            "trust_remote_code": True,
-            "rotary_base": hf_config.rope_theta,
-            "use_attn_scale": True,
-            "parallel_attn_mlp": True,
-        }
-        partial_rotary_factor = hf_config.partial_rotary_factor
-        cfg_dict["rotary_dim"] = round(partial_rotary_factor * cfg_dict["d_head"])
-    elif architecture == "Phi3ForCausalLM":
-        # Architecture for microsoft/phi3 models
-        cfg_dict = {
-            "d_model": hf_config.hidden_size,
-            "d_head": hf_config.hidden_size // hf_config.num_attention_heads,
-            "n_heads": hf_config.num_attention_heads,
-            "d_mlp": hf_config.intermediate_size,
-            "n_layers": hf_config.num_hidden_layers,
-            "n_ctx": hf_config.max_position_embeddings,
-            "eps": hf_config.rms_norm_eps,
-            "d_vocab": hf_config.vocab_size,
-            "act_fn": hf_config.hidden_act,
-            "initializer_range": hf_config.initializer_range,
-            "normalization_type": "RMS",
-            "positional_embedding_type": "rotary",
-            "trust_remote_code": True,
-            "rotary_base": hf_config.rope_theta,
-            "use_attn_scale": True,
-            "gated_mlp": True,
-            "parallel_attn_mlp": False,
-            "rotary_dim": hf_config.hidden_size // hf_config.num_attention_heads,
-        }
-
-    elif official_model_name.startswith("google/gemma-2b"):
-        # Architecture for Gemma 2b and Gemma 2b Instruct models
-        cfg_dict = {
-            "d_model": 2048,
-            "d_head": 256,
-            "n_heads": 8,
-            "d_mlp": 16384,
-            "n_layers": 18,
-            "n_ctx": 8192,
-            "eps": 1e-06,
-            "d_vocab": 256000,
-            "act_fn": "gelu_new",
-            "initializer_range": 0.02,
-            "normalization_type": "RMS",
-            "rotary_base": 10000.0,
-            "rotary_dim": 256,
-            "positional_embedding_type": "rotary",
-            "use_attn_scale": True,
-            "n_key_value_heads": 1,
-            "gated_mlp": True,
-            "final_rms": True,
-        }
-    elif official_model_name.startswith("google/gemma-7b"):
-        # Architecture for Gemma 7b and Gemma 7b Instruct models
-        cfg_dict = {
-            "d_model": 3072,
-            "d_head": 256,
-            "n_heads": 16,
-            "d_mlp": 24576,
-            "n_layers": 28,
-            "n_ctx": 8192,
-            "eps": 1e-06,
-            "d_vocab": 256000,
-            "act_fn": "gelu_new",
-            "initializer_range": 0.02,
-            "normalization_type": "RMS",
-            "rotary_base": 10000.0,
-            "rotary_dim": 256,
-            "positional_embedding_type": "rotary",
-            "use_attn_scale": True,
-            "n_key_value_heads": 16,
-            "gated_mlp": True,
-            "final_rms": True,
-        }
-    elif official_model_name.startswith("google/gemma-2-2b"):
-        # Architecture for Gemma-2 2b and Gemma-2 2b Instruct models
-        cfg_dict = {
-            "d_model": 2304,
-            "d_head": 256,
-            "n_heads": 8,
-            "d_mlp": 9216,
-            "n_layers": 26,
-            "n_ctx": 8192,
-            "eps": 1e-06,
-            "d_vocab": 256000,
-            "act_fn": "gelu_pytorch_tanh",
-            "initializer_range": 0.02,
-            "normalization_type": "RMS",
-            "rotary_base": 10000.0,
-            "positional_embedding_type": "rotary",
-            "use_attn_scale": True,
-            "n_key_value_heads": 4,
-            "window_size": 4096,
-            "use_local_attn": True,
-            "attn_types": ["global", "local"] * 21,  # Alternate global and local attn
-            "attn_scores_soft_cap": 50.0,
-            "output_logits_soft_cap": 30.0,
-            "gated_mlp": True,
-            "final_rms": True,
-            "use_normalization_before_and_after": True,
-        }
-    elif official_model_name.startswith("google/gemma-2-9b"):
-        # Architecture for Gemma-2 9b and Gemma-2 9b Instruct models
-        cfg_dict = {
-            "d_model": 3584,
-            "d_head": 256,
-            "n_heads": 16,
-            "d_mlp": 14336,
-            "n_layers": 42,
-            "n_ctx": 8192,
-            "eps": 1e-06,
-            "d_vocab": 256000,
-            "act_fn": "gelu_pytorch_tanh",
-            "initializer_range": 0.02,
-            "normalization_type": "RMS",
-            "rotary_base": 10000.0,
-            "positional_embedding_type": "rotary",
-            "use_attn_scale": True,
-            "n_key_value_heads": 8,
-            "window_size": 4096,
-            "use_local_attn": True,
-            "attn_types": ["global", "local"] * 21,  # Alternate global and local attn
-            "attn_scores_soft_cap": 50.0,
-            "output_logits_soft_cap": 30.0,
-            "gated_mlp": True,
-            "final_rms": True,
-            "use_normalization_before_and_after": True,
-        }
-    elif official_model_name.startswith("google/gemma-2-27b"):
-        # Architecture for Gemma-2 27b and Gemma-2 27b Instruct models
-        cfg_dict = {
-            "d_model": 4608,
-            "d_head": 128,
-            "n_heads": 32,
-            "d_mlp": 36864,
-            "n_layers": 46,
-            "n_ctx": 8192,
-            "eps": 1e-06,
-            "d_vocab": 256000,
-            "act_fn": "gelu_pytorch_tanh",
-            "initializer_range": 0.02,
-            "normalization_type": "RMS",
-            "rotary_base": 10000.0,
-            "positional_embedding_type": "rotary",
-            "use_attn_scale": True,
-            "attn_scale": 12.0,
-            "n_key_value_heads": 16,
-            "window_size": 4096,
-            "use_local_attn": True,
-            "attn_types": ["global", "local"] * 23,  # Alternate global and local attn
-            "attn_scores_soft_cap": 50.0,
-            "output_logits_soft_cap": 30.0,
-            "gated_mlp": True,
-            "final_rms": True,
-            "use_normalization_before_and_after": True,
-        }
-    elif architecture == "T5ForConditionalGeneration":
-        cfg_dict = {
-            "d_model": hf_config.d_model,
-            "d_head": hf_config.d_kv,
-            "n_heads": hf_config.num_heads,
-            "d_mlp": hf_config.d_ff,
-            "d_vocab": hf_config.vocab_size,
-            "n_layers": hf_config.num_layers,
-            "n_ctx": hf_config.max_length,
-            "eps": hf_config.layer_norm_epsilon,
-            "act_fn": hf_config.feed_forward_proj,
-            "positional_embedding_type": "relative_positional_bias",
-            "relative_attention_max_distance": hf_config.relative_attention_max_distance,
-            "relative_attention_num_buckets": hf_config.relative_attention_num_buckets,
-            "decoder_start_token_id": hf_config.decoder_start_token_id,
-            "attention_dir": "bidirectional",
-            "use_attn_scale": False,
-            "tie_word_embeddings": hf_config.tie_word_embeddings,
-        }
     else:
         raise NotImplementedError(f"{architecture} is not currently supported.")
     # All of these models use LayerNorm
     cfg_dict["original_architecture"] = architecture
     # The name such that AutoTokenizer.from_pretrained works
     cfg_dict["tokenizer_name"] = official_model_name
-    if kwargs.get("trust_remote_code", False):
-        cfg_dict["trust_remote_code"] = True
     return cfg_dict
 
 
@@ -1352,7 +734,9 @@ def convert_neel_model_config(official_model_name: str, **kwargs):
     AutoConfig is not supported, because these models are in the HookedTransformer format, so we directly download and load the json.
     """
     official_model_name = get_official_model_name(official_model_name)
-    cfg_json: dict = utils.download_file_from_hf(official_model_name, "config.json", **kwargs)
+    cfg_json: dict = utils.download_file_from_hf(
+        official_model_name, "config.json", **kwargs
+    )
     cfg_arch = cfg_json.get(
         "architecture", "neel" if "_old" not in official_model_name else "neel-solu-old"
     )
@@ -1385,14 +769,12 @@ def convert_neel_model_config(official_model_name: str, **kwargs):
 
 def get_pretrained_model_config(
     model_name: str,
-    hf_cfg: Optional[dict] = None,
     checkpoint_index: Optional[int] = None,
     checkpoint_value: Optional[int] = None,
     fold_ln: bool = False,
-    device: Optional[Union[str, torch.device]] = None,
+    device: Optional[str] = None,
     n_devices: int = 1,
     default_prepend_bos: bool = True,
-    dtype: torch.dtype = torch.float32,
     **kwargs,
 ):
     """Returns the pretrained model config as an HookedTransformerConfig object.
@@ -1405,8 +787,6 @@ def get_pretrained_model_config(
         model_name: The name of the model. This can be either the official
             HuggingFace model name, or the name of a model trained by me
             (NeelNanda).
-        hf_cfg (dict, optional): Config of a loaded pretrained HF model,
-            converted to a dictionary.
         checkpoint_index (int, optional): If loading from a
             checkpoint, the index of the checkpoint to load. Defaults to None.
         checkpoint_value (int, optional): If loading from a checkpoint, the
@@ -1426,17 +806,11 @@ def get_pretrained_model_config(
             so this empirically seems to give better results. To change the default behavior to False, pass in
             default_prepend_bos=False. Note that you can also locally override the default behavior by passing
             in prepend_bos=True/False when you call a method that processes the input string.
-        dtype (torch.dtype, optional): The dtype to load the TransformerLens model in.
         kwargs: Other optional arguments passed to HuggingFace's from_pretrained.
             Also given to other HuggingFace functions when compatible.
 
     """
-    if Path(model_name).exists():
-        # If the model_name is a path, it's a local model
-        cfg_dict = convert_hf_model_config(model_name, **kwargs)
-        official_model_name = model_name
-    else:
-        official_model_name = get_official_model_name(model_name)
+    official_model_name = get_official_model_name(model_name)
     if (
         official_model_name.startswith("NeelNanda")
         or official_model_name.startswith("ArthurConmy")
@@ -1444,13 +818,6 @@ def get_pretrained_model_config(
     ):
         cfg_dict = convert_neel_model_config(official_model_name, **kwargs)
     else:
-        if official_model_name.startswith(NEED_REMOTE_CODE_MODELS) and not kwargs.get(
-            "trust_remote_code", False
-        ):
-            logging.warning(
-                f"Loading model {official_model_name} requires setting trust_remote_code=True"
-            )
-            kwargs["trust_remote_code"] = True
         cfg_dict = convert_hf_model_config(official_model_name, **kwargs)
     # Processing common to both model types
     # Remove any prefix, saying the organization who made a model.
@@ -1471,13 +838,14 @@ def get_pretrained_model_config(
     if device is not None:
         cfg_dict["device"] = device
 
-    cfg_dict["dtype"] = dtype
+    if kwargs.get("torch_dtype", None) is not None:
+        cfg_dict["dtype"] = kwargs["torch_dtype"]
+    elif "dtype" in cfg_dict:
+        kwargs["torch_dtype"] = cfg_dict["dtype"]
 
     if fold_ln:
         if cfg_dict["normalization_type"] in ["LN", "LNPre"]:
             cfg_dict["normalization_type"] = "LNPre"
-        elif cfg_dict["normalization_type"] in ["RMS", "RMSPre"]:
-            cfg_dict["normalization_type"] = "RMSPre"
         else:
             logging.warning("Cannot fold in layer norm, normalization_type is not LN.")
 
@@ -1503,8 +871,6 @@ def get_pretrained_model_config(
     cfg_dict["device"] = device
     cfg_dict["n_devices"] = n_devices
     cfg_dict["default_prepend_bos"] = default_prepend_bos
-    if hf_cfg is not None:
-        cfg_dict["load_in_4bit"] = hf_cfg.get("quantization_config", {}).get("load_in_4bit", False)
 
     cfg = HookedTransformerConfig.from_dict(cfg_dict)
     return cfg
@@ -1571,11 +937,12 @@ def get_checkpoint_labels(model_name: str, **kwargs):
 
 
 # %% Loading state dicts
+
+
 def get_pretrained_state_dict(
     official_model_name: str,
     cfg: HookedTransformerConfig,
     hf_model=None,
-    dtype: torch.dtype = torch.float32,
     **kwargs,
 ) -> Dict[str, torch.Tensor]:
     """
@@ -1585,25 +952,10 @@ def get_pretrained_state_dict(
 
     hf_model: Optionally, a HuggingFace model object. If provided, we will use
         these weights rather than reloading the model.
-    dtype: The dtype to load the HuggingFace model in.
     kwargs: Other optional arguments passed to HuggingFace's from_pretrained.
         Also given to other HuggingFace functions when compatible.
     """
-    if "torch_dtype" in kwargs:
-        dtype = kwargs["torch_dtype"]
-        del kwargs["torch_dtype"]
-    if Path(official_model_name).exists():
-        official_model_name = str(Path(official_model_name).resolve())
-        logging.info(f"Loading model from local path {official_model_name}")
-    else:
-        official_model_name = get_official_model_name(official_model_name)
-    if official_model_name.startswith(NEED_REMOTE_CODE_MODELS) and not kwargs.get(
-        "trust_remote_code", False
-    ):
-        logging.warning(
-            f"Loading model {official_model_name} state dict requires setting trust_remote_code=True"
-        )
-        kwargs["trust_remote_code"] = True
+    official_model_name = get_official_model_name(official_model_name)
     if (
         official_model_name.startswith("NeelNanda")
         or official_model_name.startswith("ArthurConmy")
@@ -1620,10 +972,12 @@ def get_pretrained_state_dict(
             )[0]
         else:
             file_name = list(filter(lambda x: x.endswith("final.pth"), repo_files))[0]
-        state_dict = utils.download_file_from_hf(official_model_name, file_name, **kwargs)
-
-        # Convert to dtype
-        state_dict = {k: v.to(dtype) for k, v in state_dict.items()}
+        state_dict = utils.download_file_from_hf(
+            official_model_name, file_name, **kwargs
+        )
+        dtype = kwargs.get("torch_dtype", None)
+        if dtype is not None:
+            state_dict = {k: v.to(dtype) for k, v in state_dict.items()}
 
         if cfg.original_architecture == "neel-solu-old":
             state_dict = convert_neel_solu_old_weights(state_dict, cfg)
@@ -1632,49 +986,32 @@ def get_pretrained_state_dict(
         return state_dict
     else:
         if cfg.from_checkpoint:
-            huggingface_token = os.environ.get("HF_TOKEN", None)
             if official_model_name.startswith("stanford-crfm"):
                 hf_model = AutoModelForCausalLM.from_pretrained(
                     official_model_name,
                     revision=f"checkpoint-{cfg.checkpoint_value}",
-                    torch_dtype=dtype,
-                    token=huggingface_token,
                     **kwargs,
                 )
             elif official_model_name.startswith("EleutherAI/pythia"):
                 hf_model = AutoModelForCausalLM.from_pretrained(
                     official_model_name,
                     revision=f"step{cfg.checkpoint_value}",
-                    torch_dtype=dtype,
-                    token=huggingface_token,
                     **kwargs,
                 )
             else:
-                raise ValueError(f"Checkpoints for model {official_model_name} are not supported")
+                raise ValueError(
+                    f"Checkpoints for model {official_model_name} are not supported"
+                )
         elif hf_model is None:
-            huggingface_token = os.environ.get("HF_TOKEN", None)
-            if official_model_name in NON_HF_HOSTED_MODEL_NAMES:
-                raise NotImplementedError("Model not hosted on HuggingFace, must pass in hf_model")
+            if "llama" in official_model_name.lower():
+                raise NotImplementedError("Must pass in hf_model for LLaMA models")
             elif "bert" in official_model_name:
                 hf_model = BertForPreTraining.from_pretrained(
-                    official_model_name,
-                    torch_dtype=dtype,
-                    token=huggingface_token,
-                    **kwargs,
-                )
-            elif "t5" in official_model_name:
-                hf_model = T5ForConditionalGeneration.from_pretrained(
-                    official_model_name,
-                    torch_dtype=dtype,
-                    token=huggingface_token,
-                    **kwargs,
+                    official_model_name, **kwargs
                 )
             else:
                 hf_model = AutoModelForCausalLM.from_pretrained(
-                    official_model_name,
-                    torch_dtype=dtype,
-                    token=huggingface_token,
-                    **kwargs,
+                    official_model_name, **kwargs
                 )
 
             # Load model weights, and fold in layer norm weights
@@ -1696,28 +1033,6 @@ def get_pretrained_state_dict(
             state_dict = convert_llama_weights(hf_model, cfg)
         elif cfg.original_architecture == "BertForMaskedLM":
             state_dict = convert_bert_weights(hf_model, cfg)
-        elif cfg.original_architecture == "T5ForConditionalGeneration":
-            state_dict = convert_t5_weights(hf_model, cfg)
-        elif cfg.original_architecture == "MistralForCausalLM":
-            state_dict = convert_mistral_weights(hf_model, cfg)
-        elif cfg.original_architecture == "MixtralForCausalLM":
-            state_dict = convert_mixtral_weights(hf_model, cfg)
-        elif cfg.original_architecture == "BloomForCausalLM":
-            state_dict = convert_bloom_weights(hf_model, cfg)
-        elif cfg.original_architecture == "GPT2LMHeadCustomModel":
-            state_dict = convert_coder_weights(hf_model, cfg)
-        elif cfg.original_architecture == "QWenLMHeadModel":
-            state_dict = convert_qwen_weights(hf_model, cfg)
-        elif cfg.original_architecture == "Qwen2ForCausalLM":
-            state_dict = convert_qwen2_weights(hf_model, cfg)
-        elif cfg.original_architecture == "PhiForCausalLM":
-            state_dict = convert_phi_weights(hf_model, cfg)
-        elif cfg.original_architecture == "Phi3ForCausalLM":
-            state_dict = convert_phi3_weights(hf_model, cfg)
-        elif cfg.original_architecture == "GemmaForCausalLM":
-            state_dict = convert_gemma_weights(hf_model, cfg)
-        elif cfg.original_architecture == "Gemma2ForCausalLM":
-            state_dict = convert_gemma_weights(hf_model, cfg)
         else:
             raise ValueError(
                 f"Loading weights from the architecture is not currently supported: {cfg.original_architecture}, generated from model name {cfg.model_name}. Feel free to open an issue on GitHub to request this feature."
@@ -1756,6 +1071,548 @@ def fill_missing_keys(model, state_dict):
     return state_dict
 
 
+# Convert state dicts
+def convert_gpt2_weights(gpt2, cfg: HookedTransformerConfig):
+    state_dict = {}
+
+    state_dict["embed.W_E"] = gpt2.transformer.wte.weight
+    state_dict["pos_embed.W_pos"] = gpt2.transformer.wpe.weight
+
+    for l in range(cfg.n_layers):
+        state_dict[f"blocks.{l}.ln1.w"] = gpt2.transformer.h[l].ln_1.weight
+        state_dict[f"blocks.{l}.ln1.b"] = gpt2.transformer.h[l].ln_1.bias
+
+        # In GPT-2, q,k,v are produced by one big linear map, whose output is
+        # concat([q, k, v])
+        W = gpt2.transformer.h[l].attn.c_attn.weight
+        W_Q, W_K, W_V = torch.tensor_split(W, 3, dim=1)
+        W_Q = einops.rearrange(W_Q, "m (i h)->i m h", i=cfg.n_heads)
+        W_K = einops.rearrange(W_K, "m (i h)->i m h", i=cfg.n_heads)
+        W_V = einops.rearrange(W_V, "m (i h)->i m h", i=cfg.n_heads)
+
+        state_dict[f"blocks.{l}.attn.W_Q"] = W_Q
+        state_dict[f"blocks.{l}.attn.W_K"] = W_K
+        state_dict[f"blocks.{l}.attn.W_V"] = W_V
+
+        qkv_bias = gpt2.transformer.h[l].attn.c_attn.bias
+        qkv_bias = einops.rearrange(
+            qkv_bias,
+            "(qkv index head)->qkv index head",
+            qkv=3,
+            index=cfg.n_heads,
+            head=cfg.d_head,
+        )
+        state_dict[f"blocks.{l}.attn.b_Q"] = qkv_bias[0]
+        state_dict[f"blocks.{l}.attn.b_K"] = qkv_bias[1]
+        state_dict[f"blocks.{l}.attn.b_V"] = qkv_bias[2]
+
+        W_O = gpt2.transformer.h[l].attn.c_proj.weight
+        W_O = einops.rearrange(W_O, "(i h) m->i h m", i=cfg.n_heads)
+        state_dict[f"blocks.{l}.attn.W_O"] = W_O
+        state_dict[f"blocks.{l}.attn.b_O"] = gpt2.transformer.h[l].attn.c_proj.bias
+
+        state_dict[f"blocks.{l}.ln2.w"] = gpt2.transformer.h[l].ln_2.weight
+        state_dict[f"blocks.{l}.ln2.b"] = gpt2.transformer.h[l].ln_2.bias
+
+        W_in = gpt2.transformer.h[l].mlp.c_fc.weight
+        state_dict[f"blocks.{l}.mlp.W_in"] = W_in
+        state_dict[f"blocks.{l}.mlp.b_in"] = gpt2.transformer.h[l].mlp.c_fc.bias
+
+        W_out = gpt2.transformer.h[l].mlp.c_proj.weight
+        state_dict[f"blocks.{l}.mlp.W_out"] = W_out
+        state_dict[f"blocks.{l}.mlp.b_out"] = gpt2.transformer.h[l].mlp.c_proj.bias
+    state_dict["unembed.W_U"] = gpt2.lm_head.weight.T
+
+    state_dict["ln_final.w"] = gpt2.transformer.ln_f.weight
+    state_dict["ln_final.b"] = gpt2.transformer.ln_f.bias
+    return state_dict
+
+
+def convert_neo_weights(neo, cfg: HookedTransformerConfig):
+    state_dict = {}
+
+    state_dict["embed.W_E"] = neo.transformer.wte.weight
+    state_dict["pos_embed.W_pos"] = neo.transformer.wpe.weight
+
+    for l in range(cfg.n_layers):
+        state_dict[f"blocks.{l}.ln1.w"] = neo.transformer.h[l].ln_1.weight
+        state_dict[f"blocks.{l}.ln1.b"] = neo.transformer.h[l].ln_1.bias
+
+        W_Q = neo.transformer.h[l].attn.attention.q_proj.weight
+        W_K = neo.transformer.h[l].attn.attention.k_proj.weight
+        W_V = neo.transformer.h[l].attn.attention.v_proj.weight
+        W_Q = einops.rearrange(W_Q, "(i h) m->i m h", i=cfg.n_heads)
+        W_K = einops.rearrange(W_K, "(i h) m->i m h", i=cfg.n_heads)
+        W_V = einops.rearrange(W_V, "(i h) m->i m h", i=cfg.n_heads)
+        state_dict[f"blocks.{l}.attn.W_Q"] = W_Q
+        state_dict[f"blocks.{l}.attn.W_K"] = W_K
+        state_dict[f"blocks.{l}.attn.W_V"] = W_V
+
+        state_dict[f"blocks.{l}.attn.b_Q"] = torch.zeros(
+            cfg.n_heads, cfg.d_head, dtype=cfg.dtype
+        )
+        state_dict[f"blocks.{l}.attn.b_K"] = torch.zeros(
+            cfg.n_heads, cfg.d_head, dtype=cfg.dtype
+        )
+        state_dict[f"blocks.{l}.attn.b_V"] = torch.zeros(
+            cfg.n_heads, cfg.d_head, dtype=cfg.dtype
+        )
+
+        W_O = neo.transformer.h[l].attn.attention.out_proj.weight
+        W_O = einops.rearrange(W_O, "m (i h)->i h m", i=cfg.n_heads)
+        state_dict[f"blocks.{l}.attn.W_O"] = W_O
+        state_dict[f"blocks.{l}.attn.b_O"] = neo.transformer.h[
+            l
+        ].attn.attention.out_proj.bias
+
+        state_dict[f"blocks.{l}.ln2.w"] = neo.transformer.h[l].ln_2.weight
+        state_dict[f"blocks.{l}.ln2.b"] = neo.transformer.h[l].ln_2.bias
+
+        state_dict[f"blocks.{l}.mlp.W_in"] = neo.transformer.h[l].mlp.c_fc.weight.T
+        state_dict[f"blocks.{l}.mlp.b_in"] = neo.transformer.h[l].mlp.c_fc.bias
+
+        state_dict[f"blocks.{l}.mlp.W_out"] = neo.transformer.h[l].mlp.c_proj.weight.T
+        state_dict[f"blocks.{l}.mlp.b_out"] = neo.transformer.h[l].mlp.c_proj.bias
+    state_dict["ln_final.w"] = neo.transformer.ln_f.weight
+    state_dict["ln_final.b"] = neo.transformer.ln_f.bias
+
+    state_dict["unembed.W_U"] = neo.lm_head.weight.T
+    state_dict["unembed.b_U"] = torch.zeros(cfg.d_vocab, dtype=cfg.dtype)
+    return state_dict
+
+
+def convert_gptj_weights(gptj, cfg: HookedTransformerConfig):
+    state_dict = {}
+
+    state_dict["embed.W_E"] = gptj.transformer.wte.weight
+
+    for l in range(cfg.n_layers):
+        state_dict[f"blocks.{l}.ln1.w"] = gptj.transformer.h[l].ln_1.weight
+        state_dict[f"blocks.{l}.ln1.b"] = gptj.transformer.h[l].ln_1.bias
+
+        W_Q = gptj.transformer.h[l].attn.q_proj.weight
+        W_K = gptj.transformer.h[l].attn.k_proj.weight
+        W_V = gptj.transformer.h[l].attn.v_proj.weight
+        W_Q = einops.rearrange(W_Q, "(i h) m->i m h", i=cfg.n_heads)
+        W_K = einops.rearrange(W_K, "(i h) m->i m h", i=cfg.n_heads)
+        W_V = einops.rearrange(W_V, "(i h) m->i m h", i=cfg.n_heads)
+        state_dict[f"blocks.{l}.attn.W_Q"] = W_Q
+        state_dict[f"blocks.{l}.attn.W_K"] = W_K
+        state_dict[f"blocks.{l}.attn.W_V"] = W_V
+
+        state_dict[f"blocks.{l}.attn.b_Q"] = torch.zeros(
+            cfg.n_heads, cfg.d_head, dtype=cfg.dtype
+        )
+        state_dict[f"blocks.{l}.attn.b_K"] = torch.zeros(
+            cfg.n_heads, cfg.d_head, dtype=cfg.dtype
+        )
+        state_dict[f"blocks.{l}.attn.b_V"] = torch.zeros(
+            cfg.n_heads, cfg.d_head, dtype=cfg.dtype
+        )
+
+        W_O = gptj.transformer.h[l].attn.out_proj.weight
+        W_O = einops.rearrange(W_O, "m (i h)->i h m", i=cfg.n_heads)
+        state_dict[f"blocks.{l}.attn.W_O"] = W_O
+        state_dict[f"blocks.{l}.attn.b_O"] = torch.zeros(cfg.d_model, dtype=cfg.dtype)
+
+        # Layer Norm 1 and 2 are tied.
+        state_dict[f"blocks.{l}.ln2.w"] = state_dict[f"blocks.{l}.ln1.w"]
+        state_dict[f"blocks.{l}.ln2.b"] = state_dict[f"blocks.{l}.ln1.b"]
+
+        state_dict[f"blocks.{l}.mlp.W_in"] = gptj.transformer.h[l].mlp.fc_in.weight.T
+        state_dict[f"blocks.{l}.mlp.b_in"] = gptj.transformer.h[l].mlp.fc_in.bias
+
+        state_dict[f"blocks.{l}.mlp.W_out"] = gptj.transformer.h[l].mlp.fc_out.weight.T
+        state_dict[f"blocks.{l}.mlp.b_out"] = gptj.transformer.h[l].mlp.fc_out.bias
+    state_dict["ln_final.w"] = gptj.transformer.ln_f.weight
+    state_dict["ln_final.b"] = gptj.transformer.ln_f.bias
+
+    state_dict["unembed.W_U"] = gptj.lm_head.weight.T
+    # Contains a bias, for some reason?
+    state_dict["unembed.b_U"] = gptj.lm_head.bias
+    return state_dict
+
+
+def convert_neox_weights(neox, cfg: HookedTransformerConfig):
+    state_dict = {}
+
+    state_dict["embed.W_E"] = neox.gpt_neox.embed_in.weight
+
+    for l in range(cfg.n_layers):
+        state_dict[f"blocks.{l}.ln1.w"] = neox.gpt_neox.layers[l].input_layernorm.weight
+        state_dict[f"blocks.{l}.ln1.b"] = neox.gpt_neox.layers[l].input_layernorm.bias
+
+        # For some inexplicable reason, NeoX both uses the concatenated QKV
+        # matmul of GPT-2 (afaict this has a neglible performance impact) AND
+        # has the flattened axis in the DIFFERENT order of (head_index qkv
+        # d_head) - this took me an hour to debug...
+        W = neox.gpt_neox.layers[l].attention.query_key_value.weight
+        W = einops.rearrange(W, "(i qkv h) m->qkv i m h", i=cfg.n_heads, qkv=3)
+
+        # Fold in layer norm weights
+        state_dict[f"blocks.{l}.attn.W_Q"] = W[0]
+        state_dict[f"blocks.{l}.attn.W_K"] = W[1]
+        state_dict[f"blocks.{l}.attn.W_V"] = W[2]
+
+        qkv_bias = neox.gpt_neox.layers[l].attention.query_key_value.bias
+        qkv_bias = einops.rearrange(
+            qkv_bias,
+            "(index qkv head)->qkv index head",
+            qkv=3,
+            index=cfg.n_heads,
+            head=cfg.d_head,
+        )
+        # Fold in layer norm biases
+        state_dict[f"blocks.{l}.attn.b_Q"] = qkv_bias[0]
+        state_dict[f"blocks.{l}.attn.b_K"] = qkv_bias[1]
+        state_dict[f"blocks.{l}.attn.b_V"] = qkv_bias[2]
+
+        W_O = neox.gpt_neox.layers[l].attention.dense.weight
+        W_O = einops.rearrange(W_O, "m (i h)->i h m", i=cfg.n_heads)
+        state_dict[f"blocks.{l}.attn.W_O"] = W_O
+        state_dict[f"blocks.{l}.attn.b_O"] = neox.gpt_neox.layers[
+            l
+        ].attention.dense.bias
+
+        state_dict[f"blocks.{l}.ln2.w"] = neox.gpt_neox.layers[
+            l
+        ].post_attention_layernorm.weight
+        state_dict[f"blocks.{l}.ln2.b"] = neox.gpt_neox.layers[
+            l
+        ].post_attention_layernorm.bias
+
+        state_dict[f"blocks.{l}.mlp.W_in"] = neox.gpt_neox.layers[
+            l
+        ].mlp.dense_h_to_4h.weight.T
+        state_dict[f"blocks.{l}.mlp.b_in"] = neox.gpt_neox.layers[
+            l
+        ].mlp.dense_h_to_4h.bias
+
+        state_dict[f"blocks.{l}.mlp.W_out"] = neox.gpt_neox.layers[
+            l
+        ].mlp.dense_4h_to_h.weight.T
+        state_dict[f"blocks.{l}.mlp.b_out"] = neox.gpt_neox.layers[
+            l
+        ].mlp.dense_4h_to_h.bias
+    state_dict["ln_final.w"] = neox.gpt_neox.final_layer_norm.weight
+    state_dict["ln_final.b"] = neox.gpt_neox.final_layer_norm.bias
+
+    state_dict["unembed.W_U"] = neox.embed_out.weight.T
+    state_dict["unembed.b_U"] = torch.zeros(cfg.d_vocab, dtype=cfg.dtype)
+    return state_dict
+
+
+def convert_llama_weights(llama, cfg: HookedTransformerConfig):
+    state_dict = {}
+
+    state_dict["embed.W_E"] = llama.model.embed_tokens.weight
+
+    # llama has no biases anywhere and deals with everything else roughly like
+    # GPTNeoX with different names
+
+    for l in range(cfg.n_layers):
+        state_dict[f"blocks.{l}.ln1.w"] = llama.model.layers[l].input_layernorm.weight
+
+        W_Q = llama.model.layers[l].self_attn.q_proj.weight
+        W_K = llama.model.layers[l].self_attn.k_proj.weight
+        W_V = llama.model.layers[l].self_attn.v_proj.weight
+        W_Q = einops.rearrange(W_Q, "(n h) m->n m h", n=cfg.n_heads)
+        W_K = einops.rearrange(W_K, "(n h) m->n m h", n=cfg.n_heads)
+        W_V = einops.rearrange(W_V, "(n h) m->n m h", n=cfg.n_heads)
+        state_dict[f"blocks.{l}.attn.W_Q"] = W_Q
+        state_dict[f"blocks.{l}.attn.W_K"] = W_K
+        state_dict[f"blocks.{l}.attn.W_V"] = W_V
+
+        state_dict[f"blocks.{l}.attn.b_Q"] = torch.zeros(
+            cfg.n_heads, cfg.d_head, dtype=cfg.dtype
+        )
+        state_dict[f"blocks.{l}.attn.b_K"] = torch.zeros(
+            cfg.n_heads, cfg.d_head, dtype=cfg.dtype
+        )
+        state_dict[f"blocks.{l}.attn.b_V"] = torch.zeros(
+            cfg.n_heads, cfg.d_head, dtype=cfg.dtype
+        )
+
+        W_O = llama.model.layers[l].self_attn.o_proj.weight
+        W_O = einops.rearrange(W_O, "m (n h)->n h m", n=cfg.n_heads)
+        state_dict[f"blocks.{l}.attn.W_O"] = W_O
+
+        state_dict[f"blocks.{l}.attn.b_O"] = torch.zeros(cfg.d_model, dtype=cfg.dtype)
+
+        state_dict[f"blocks.{l}.ln2.w"] = llama.model.layers[
+            l
+        ].post_attention_layernorm.weight
+
+        state_dict[f"blocks.{l}.mlp.W_in"] = llama.model.layers[l].mlp.up_proj.weight.T
+        state_dict[f"blocks.{l}.mlp.W_gate"] = llama.model.layers[
+            l
+        ].mlp.gate_proj.weight.T
+        state_dict[f"blocks.{l}.mlp.b_in"] = torch.zeros(cfg.d_mlp, dtype=cfg.dtype)
+
+        state_dict[f"blocks.{l}.mlp.W_out"] = llama.model.layers[
+            l
+        ].mlp.down_proj.weight.T
+        state_dict[f"blocks.{l}.mlp.b_out"] = torch.zeros(cfg.d_model, dtype=cfg.dtype)
+
+    state_dict["ln_final.w"] = llama.model.norm.weight
+
+    state_dict["unembed.W_U"] = llama.lm_head.weight.T
+    state_dict["unembed.b_U"] = torch.zeros(cfg.d_vocab, dtype=cfg.dtype)
+
+    return state_dict
+
+
+def convert_opt_weights(opt, cfg: HookedTransformerConfig):
+    state_dict = {}
+
+    state_dict["embed.W_E"] = opt.model.decoder.embed_tokens.weight
+    state_dict["pos_embed.W_pos"] = opt.model.decoder.embed_positions.weight[2:, :]
+
+    for l in range(cfg.n_layers):
+        state_dict[f"blocks.{l}.ln1.w"] = opt.model.decoder.layers[
+            l
+        ].self_attn_layer_norm.weight
+        state_dict[f"blocks.{l}.ln1.b"] = opt.model.decoder.layers[
+            l
+        ].self_attn_layer_norm.bias
+
+        W_Q = opt.model.decoder.layers[l].self_attn.q_proj.weight
+        W_K = opt.model.decoder.layers[l].self_attn.k_proj.weight
+        W_V = opt.model.decoder.layers[l].self_attn.v_proj.weight
+        W_Q = einops.rearrange(
+            W_Q,
+            "(index d_head) d_model->index d_model d_head",
+            index=cfg.n_heads,
+        )
+        W_K = einops.rearrange(
+            W_K,
+            "(index d_head) d_model->index d_model d_head",
+            index=cfg.n_heads,
+        )
+        W_V = einops.rearrange(
+            W_V,
+            "(index d_head) d_model->index d_model d_head",
+            index=cfg.n_heads,
+        )
+
+        state_dict[f"blocks.{l}.attn.W_Q"] = W_Q
+        state_dict[f"blocks.{l}.attn.W_K"] = W_K
+        state_dict[f"blocks.{l}.attn.W_V"] = W_V
+
+        q_bias = einops.rearrange(
+            opt.model.decoder.layers[l].self_attn.q_proj.bias,
+            "(head_index d_head)->head_index d_head",
+            head_index=cfg.n_heads,
+            d_head=cfg.d_head,
+        )
+        k_bias = einops.rearrange(
+            opt.model.decoder.layers[l].self_attn.k_proj.bias,
+            "(head_index d_head)->head_index d_head",
+            head_index=cfg.n_heads,
+            d_head=cfg.d_head,
+        )
+        v_bias = einops.rearrange(
+            opt.model.decoder.layers[l].self_attn.v_proj.bias,
+            "(head_index d_head)->head_index d_head",
+            head_index=cfg.n_heads,
+            d_head=cfg.d_head,
+        )
+
+        state_dict[f"blocks.{l}.attn.b_Q"] = q_bias
+        state_dict[f"blocks.{l}.attn.b_K"] = k_bias
+        state_dict[f"blocks.{l}.attn.b_V"] = v_bias
+
+        W_O = opt.model.decoder.layers[l].self_attn.out_proj.weight
+        W_O = einops.rearrange(
+            W_O,
+            "d_model (index d_head)->index d_head d_model",
+            index=cfg.n_heads,
+        )
+        state_dict[f"blocks.{l}.attn.W_O"] = W_O
+        state_dict[f"blocks.{l}.attn.b_O"] = opt.model.decoder.layers[
+            l
+        ].self_attn.out_proj.bias
+
+        state_dict[f"blocks.{l}.ln2.w"] = opt.model.decoder.layers[
+            l
+        ].final_layer_norm.weight
+        state_dict[f"blocks.{l}.ln2.b"] = opt.model.decoder.layers[
+            l
+        ].final_layer_norm.bias
+
+        state_dict[f"blocks.{l}.mlp.W_in"] = opt.model.decoder.layers[l].fc1.weight.T
+        state_dict[f"blocks.{l}.mlp.W_out"] = opt.model.decoder.layers[l].fc2.weight.T
+
+        state_dict[f"blocks.{l}.mlp.b_in"] = opt.model.decoder.layers[l].fc1.bias
+        state_dict[f"blocks.{l}.mlp.b_out"] = opt.model.decoder.layers[l].fc2.bias
+    state_dict["ln_final.w"] = opt.model.decoder.final_layer_norm.weight
+    state_dict["ln_final.b"] = opt.model.decoder.final_layer_norm.bias
+    state_dict["unembed.W_U"] = opt.lm_head.weight.T
+    state_dict["unembed.b_U"] = torch.zeros(cfg.d_vocab, dtype=cfg.dtype)
+    return state_dict
+
+
+def convert_neel_solu_old_weights(state_dict: dict, cfg: HookedTransformerConfig):
+    """
+    Converts the weights of my old SoLU models to the HookedTransformer format.
+    Takes as input a state dict, *not* a model object.
+
+    There are a bunch of dumb bugs in the original code, sorry!
+
+    Models 1L, 2L, 4L and 6L have left facing weights (ie, weights have shape
+    [dim_out, dim_in]) while HookedTransformer does right facing (ie [dim_in,
+    dim_out]).
+
+    8L has *just* a left facing W_pos, the rest right facing.
+
+    And some models were trained with
+    """
+    # Early models have left facing W_pos
+    reverse_pos = cfg.n_layers <= 8
+
+    # Models prior to 8L have left facing everything (8L has JUST left facing W_pos - sorry! Stupid bug)
+    reverse_weights = cfg.n_layers <= 6
+
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        k = k.replace("norm", "ln")
+        if k.startswith("ln."):
+            k = k.replace("ln.", "ln_final.")
+        new_state_dict[k] = v
+
+    if reverse_pos:
+        new_state_dict["pos_embed.W_pos"] = new_state_dict["pos_embed.W_pos"].T
+    if reverse_weights:
+        for k, v in new_state_dict.items():
+            if "W_" in k and "W_pos" not in k:
+                new_state_dict[k] = v.transpose(-2, -1)
+    return new_state_dict
+
+
+def convert_mingpt_weights(old_state_dict, cfg: HookedTransformerConfig):
+    # mingpt (https://github.com/karpathy/minGPT) is mostly similar to GPT-2,
+    # but doesn't concat the QKV matrices.
+    state_dict = {}
+
+    state_dict["embed.W_E"] = old_state_dict["tok_emb.weight"]
+    state_dict["pos_embed.W_pos"] = old_state_dict["pos_emb"].squeeze()
+
+    for l in range(cfg.n_layers):
+        state_dict[f"blocks.{l}.ln1.w"] = old_state_dict[f"blocks.{l}.ln1.weight"]
+        state_dict[f"blocks.{l}.ln1.b"] = old_state_dict[f"blocks.{l}.ln1.bias"]
+
+        W_Q = old_state_dict[f"blocks.{l}.attn.query.weight"]
+        W_K = old_state_dict[f"blocks.{l}.attn.key.weight"]
+        W_V = old_state_dict[f"blocks.{l}.attn.value.weight"]
+        W_Q = einops.rearrange(W_Q, "(i h) m->i m h", i=cfg.n_heads)
+        W_K = einops.rearrange(W_K, "(i h) m->i m h", i=cfg.n_heads)
+        W_V = einops.rearrange(W_V, "(i h) m->i m h", i=cfg.n_heads)
+        state_dict[f"blocks.{l}.attn.W_Q"] = W_Q
+        state_dict[f"blocks.{l}.attn.W_K"] = W_K
+        state_dict[f"blocks.{l}.attn.W_V"] = W_V
+
+        q_bias = einops.rearrange(
+            old_state_dict[f"blocks.{l}.attn.query.bias"], "(i h)->i h", i=cfg.n_heads
+        )
+        k_bias = einops.rearrange(
+            old_state_dict[f"blocks.{l}.attn.key.bias"], "(i h)->i h", i=cfg.n_heads
+        )
+        v_bias = einops.rearrange(
+            old_state_dict[f"blocks.{l}.attn.value.bias"], "(i h)->i h", i=cfg.n_heads
+        )
+
+        state_dict[f"blocks.{l}.attn.b_Q"] = q_bias
+        state_dict[f"blocks.{l}.attn.b_K"] = k_bias
+        state_dict[f"blocks.{l}.attn.b_V"] = v_bias
+
+        W_O = old_state_dict[f"blocks.{l}.attn.proj.weight"]
+        W_O = einops.rearrange(W_O, "m (i h)->i h m", i=cfg.n_heads)
+        state_dict[f"blocks.{l}.attn.W_O"] = W_O
+        state_dict[f"blocks.{l}.attn.b_O"] = old_state_dict[
+            f"blocks.{l}.attn.proj.bias"
+        ]
+
+        state_dict[f"blocks.{l}.ln2.w"] = old_state_dict[f"blocks.{l}.ln2.weight"]
+        state_dict[f"blocks.{l}.ln2.b"] = old_state_dict[f"blocks.{l}.ln2.bias"]
+
+        W_in = old_state_dict[f"blocks.{l}.mlp.0.weight"]
+        state_dict[f"blocks.{l}.mlp.W_in"] = W_in.T
+        state_dict[f"blocks.{l}.mlp.b_in"] = old_state_dict[f"blocks.{l}.mlp.0.bias"]
+
+        W_out = old_state_dict[f"blocks.{l}.mlp.2.weight"]
+        state_dict[f"blocks.{l}.mlp.W_out"] = W_out.T
+        state_dict[f"blocks.{l}.mlp.b_out"] = old_state_dict[f"blocks.{l}.mlp.2.bias"]
+
+    state_dict["unembed.W_U"] = old_state_dict["head.weight"].T
+
+    state_dict["ln_final.w"] = old_state_dict["ln_f.weight"]
+    state_dict["ln_final.b"] = old_state_dict["ln_f.bias"]
+
+    return state_dict
+
+
+def convert_bert_weights(bert, cfg: HookedTransformerConfig):
+    embeddings = bert.bert.embeddings
+    state_dict = {
+        "embed.embed.W_E": embeddings.word_embeddings.weight,
+        "embed.pos_embed.W_pos": embeddings.position_embeddings.weight,
+        "embed.token_type_embed.W_token_type": embeddings.token_type_embeddings.weight,
+        "embed.ln.w": embeddings.LayerNorm.weight,
+        "embed.ln.b": embeddings.LayerNorm.bias,
+    }
+
+    for l in range(cfg.n_layers):
+        block = bert.bert.encoder.layer[l]
+        state_dict[f"blocks.{l}.attn.W_Q"] = einops.rearrange(
+            block.attention.self.query.weight, "(i h) m -> i m h", i=cfg.n_heads
+        )
+        state_dict[f"blocks.{l}.attn.b_Q"] = einops.rearrange(
+            block.attention.self.query.bias, "(i h) -> i h", i=cfg.n_heads
+        )
+        state_dict[f"blocks.{l}.attn.W_K"] = einops.rearrange(
+            block.attention.self.key.weight, "(i h) m -> i m h", i=cfg.n_heads
+        )
+        state_dict[f"blocks.{l}.attn.b_K"] = einops.rearrange(
+            block.attention.self.key.bias, "(i h) -> i h", i=cfg.n_heads
+        )
+        state_dict[f"blocks.{l}.attn.W_V"] = einops.rearrange(
+            block.attention.self.value.weight, "(i h) m -> i m h", i=cfg.n_heads
+        )
+        state_dict[f"blocks.{l}.attn.b_V"] = einops.rearrange(
+            block.attention.self.value.bias, "(i h) -> i h", i=cfg.n_heads
+        )
+        state_dict[f"blocks.{l}.attn.W_O"] = einops.rearrange(
+            block.attention.output.dense.weight,
+            "m (i h) -> i h m",
+            i=cfg.n_heads,
+        )
+        state_dict[f"blocks.{l}.attn.b_O"] = block.attention.output.dense.bias
+        state_dict[f"blocks.{l}.ln1.w"] = block.attention.output.LayerNorm.weight
+        state_dict[f"blocks.{l}.ln1.b"] = block.attention.output.LayerNorm.bias
+        state_dict[f"blocks.{l}.mlp.W_in"] = einops.rearrange(
+            block.intermediate.dense.weight, "mlp model -> model mlp"
+        )
+        state_dict[f"blocks.{l}.mlp.b_in"] = block.intermediate.dense.bias
+        state_dict[f"blocks.{l}.mlp.W_out"] = einops.rearrange(
+            block.output.dense.weight, "model mlp -> mlp model"
+        )
+        state_dict[f"blocks.{l}.mlp.b_out"] = block.output.dense.bias
+        state_dict[f"blocks.{l}.ln2.w"] = block.output.LayerNorm.weight
+        state_dict[f"blocks.{l}.ln2.b"] = block.output.LayerNorm.bias
+
+    mlm_head = bert.cls.predictions
+    state_dict["mlm_head.W"] = mlm_head.transform.dense.weight
+    state_dict["mlm_head.b"] = mlm_head.transform.dense.bias
+    state_dict["mlm_head.ln.w"] = mlm_head.transform.LayerNorm.weight
+    state_dict["mlm_head.ln.b"] = mlm_head.transform.LayerNorm.bias
+    # Note: BERT uses tied embeddings
+    state_dict["unembed.W_U"] = embeddings.word_embeddings.weight.T
+    # "unembed.W_U": mlm_head.decoder.weight.T,
+    state_dict["unembed.b_U"] = mlm_head.bias
+
+    return state_dict
+
+
 @dataclasses.dataclass
 class Config:
     d_model: int = 768
@@ -1775,7 +1632,9 @@ def get_basic_config(model_name: str, **kwargs) -> Config:
     return Config(
         **{
             k: v
-            for k, v in get_pretrained_model_config(model_name, **kwargs).to_dict().items()
+            for k, v in get_pretrained_model_config(model_name, **kwargs)
+            .to_dict()
+            .items()
             if k
             in [
                 "d_model",

@@ -62,6 +62,10 @@ except Exception as e:
 # os.environ['HTTP_PROXY'] = 'http://127.0.0.1:10809'
 # os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:10809'
 #%%
+import sys
+sys.path.append('/data/shenth/work/Automatic-Circuit-Discovery')
+import acdc
+import transformer_lens
 import wandb
 import IPython
 from IPython.display import Image, display
